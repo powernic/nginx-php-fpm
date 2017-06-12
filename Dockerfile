@@ -5,6 +5,7 @@ MAINTAINER ngineered <support@ngineered.co.uk>
 ENV php_conf /usr/local/etc/php-fpm.conf 
 ENV fpm_conf /usr/local/etc/php-fpm.d/www.conf
 ENV php_vars /usr/local/etc/php/conf.d/docker-vars.ini
+ARG IMAGICK_VERSION="3.4.2"
 ENV composer_hash 55d6ead61b29c7bdee5cccfb50076874187bd9f21f65d8991d46ec5cc90518f447387fb9f76ebae1fbbacf329e583e30
 
 ENV NGINX_VERSION 1.11.9
@@ -157,10 +158,10 @@ RUN echo @testing http://nl.alpinelinux.org/alpine/edge/testing >> /etc/apk/repo
     libpng-dev \
     icu-dev \
     libpq \
-    libxslt-dev \
+    libxslt-dev \ 
     libffi-dev &&\
     #curl iconv session
-    docker-php-ext-install pdo_mysql mysqli mcrypt gd exif intl xsl json soap dom zip && \
+    docker-php-ext-install pdo_mysql mysqli mcrypt exif intl xsl json soap dom zip && \
     mkdir -p /etc/nginx && \
     mkdir -p /var/www/app && \
     mkdir -p /run/nginx && \
@@ -175,7 +176,43 @@ RUN echo @testing http://nl.alpinelinux.org/alpine/edge/testing >> /etc/apk/repo
     apk del gcc musl-dev linux-headers libffi-dev augeas-dev python-dev
 #    ln -s /usr/bin/php7 /usr/bin/php
 
-ADD conf/supervisord.conf /etc/supervisord.conf
+	ADD conf/supervisord.conf /etc/supervisord.conf
+	
+RUN	apk add --no-cache --virtual .imagick-build-dependencies \
+	  autoconf \
+	  curl \
+	  g++ \
+	  gcc \
+	  git \
+	  imagemagick-dev \
+	  libtool \
+	  make \
+	  tar \
+	&& apk add --virtual .imagick-runtime-dependencies \
+	  imagemagick \
+
+	# (!) Ниже нужно оставить один способ для скачивания, убрав другой, включая его зависимости.
+
+	# Git
+	&& IMAGICK_TAG="3.4.2" \
+	&& git clone -o ${IMAGICK_TAG} --depth 1 https://github.com/mkoppanen/imagick.git /tmp/imagick \
+	&& cd /tmp/imagick \
+
+	# curl (wget)
+	#&& IMAGICK_VERSION="3.4.2" \
+	#&& IMAGICK_FILENAME="imagick-${IMAGICK_VERSION}" \
+	#&& IMAGICK_SOURCE="https://github.com/mkoppanen/imagick/archive/${IMAGICK_VERSION}.tar.gz" \
+	#&& curl -fSL --connect-timeout 30 ${IMAGICK_SOURCE} | tar xz -C /tmp \
+	#&& cd /tmp/${IMAGICK_FILENAME} \
+
+	&& phpize \
+	&& ./configure \
+	&& make \
+	&& make install \
+
+	&& echo "extension=imagick.so" > /usr/local/etc/php/conf.d/ext-imagick.ini \
+
+	&& apk del .imagick-build-dependencies
 
 # Copy our nginx config
 RUN rm -Rf /etc/nginx/nginx.conf
